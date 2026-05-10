@@ -13,6 +13,7 @@ The browser sends a POST with JSON like:
     "system":       "You are a helpful assistant.",
     "messages":     [{"role": "user", "content": [...]}],
     "useWebSearch": false,
+    "thinking":     false,
     "maxTokens":    4096
   }
 """
@@ -25,6 +26,7 @@ import anthropic
 
 DEFAULT_MODEL = "claude-sonnet-4-6"
 DEFAULT_MAX_TOKENS = 4096
+THINKING_BUDGET = 4096
 
 
 class handler(BaseHTTPRequestHandler):
@@ -48,9 +50,14 @@ class handler(BaseHTTPRequestHandler):
                 "Environment Variables, then redeploy.",
             )
 
+        max_tokens = int(data.get("maxTokens") or DEFAULT_MAX_TOKENS)
+        if data.get("thinking"):
+            # max_tokens must exceed the thinking budget; give the response some headroom.
+            max_tokens = max(max_tokens, THINKING_BUDGET + 4096)
+
         kwargs = {
             "model": data.get("model") or DEFAULT_MODEL,
-            "max_tokens": int(data.get("maxTokens") or DEFAULT_MAX_TOKENS),
+            "max_tokens": max_tokens,
             "messages": data.get("messages") or [],
         }
         system = data.get("system")
@@ -62,6 +69,8 @@ class handler(BaseHTTPRequestHandler):
                 "name": "web_search",
                 "max_uses": 5,
             }]
+        if data.get("thinking"):
+            kwargs["thinking"] = {"type": "enabled", "budget_tokens": THINKING_BUDGET}
 
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
@@ -93,15 +102,19 @@ class handler(BaseHTTPRequestHandler):
         t = getattr(event, "type", None)
         if t == "content_block_start":
             block = event.content_block
-            if getattr(block, "type", None) == "server_tool_use":
+            block_type = getattr(block, "type", None)
+            if block_type == "server_tool_use":
                 query = ""
                 if isinstance(getattr(block, "input", None), dict):
                     query = block.input.get("query", "")
                 self._sse({"type": "tool_use", "name": block.name, "query": query})
         elif t == "content_block_delta":
             delta = event.delta
-            if getattr(delta, "type", None) == "text_delta":
+            delta_type = getattr(delta, "type", None)
+            if delta_type == "text_delta":
                 self._sse({"type": "text", "text": delta.text})
+            elif delta_type == "thinking_delta":
+                self._sse({"type": "thinking", "text": delta.thinking})
 
     def _sse(self, payload):
         try:

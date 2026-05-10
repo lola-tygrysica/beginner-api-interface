@@ -4,14 +4,18 @@ A clean, ready-to-deploy chat UI for the Claude API. No accounts, no database �
 
 **What you get:**
 
-- Sidebar with multiple **projects**, each with its own conversation, system prompt, and model.
-- **Model switcher** — Opus, Sonnet, or Haiku (or anything else you wire up).
+- **Projects** in the sidebar, each holding multiple **conversations** (just like Claude.ai).
+- **Model switcher** — Opus, Sonnet, and Haiku across the 4.x line. Add or remove models with one line of code.
 - **Web search** — toggle it on per project; Claude searches the web when it needs to.
+- **Extended thinking** — toggle it on for complex reasoning. Thinking is shown collapsed above the response.
 - **File library** — upload PDFs, images, or text/code files and attach them to your messages.
 - **Streaming** responses — text appears as Claude writes it.
-- Everything is saved in your browser (`localStorage`). No login, no Supabase, no backend storage.
+- **Token + cost counters** — per message and cumulative for the conversation. Estimated dollars based on published pricing.
+- **Message actions** — copy, regenerate, delete on hover.
+- **Export conversations** as Markdown or JSON.
+- **Everything saved in your browser** (`localStorage`). No login, no Supabase, no backend storage.
 
-The whole thing is ~600 lines of code across 4 files. Read it. Change it. Make it yours.
+The whole thing is ~1,000 lines of code across 4 files. Read it. Change it. Make it yours.
 
 ---
 
@@ -48,6 +52,10 @@ cd beginner-api-interface
 # Create a .env file with your key
 echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
 
+# If you're on a Mac with Homebrew Python, install uv first
+# (Vercel's Python runtime needs it to install dependencies):
+brew install uv
+
 # Run it locally
 npx vercel dev
 ```
@@ -63,35 +71,55 @@ Then open `http://localhost:3000`.
 ```
 beginner-api-interface/
 ├── api/
-│   └── chat.py          ← Serverless endpoint. Proxies to Anthropic & streams back.
+│   ├── chat.py          ← Serverless endpoint. Proxies to Anthropic & streams back.
+│   └── requirements.txt ← Python deps for the function (just `anthropic`).
 ├── public/
-│   ├── index.html       ← The page skeleton (sidebar + main pane).
-│   ├── styles.css       ← All styling.
-│   └── app.js           ← All client logic (projects, files, streaming).
+│   ├── index.html       ← The page skeleton (sidebar + main pane + dialogs).
+│   ├── styles.css       ← All styling. Theme via CSS variables at the top.
+│   └── app.js           ← All client logic (projects, conversations, files, streaming).
 ├── vercel.json          ← Tells Vercel how to route requests.
-├── requirements.txt     ← Just `anthropic` (the Python SDK).
 └── README.md            ← You are here.
 ```
 
-That's everything. There's no build step, no framework, no bundler. Open the files in any editor and you can read the whole thing in 15 minutes.
+That's everything. There's no build step, no framework, no bundler.
 
 ### What the API does
 
-[`api/chat.py`](api/chat.py) is a single Python serverless function. It accepts a POST with the conversation history, calls `client.messages.stream(...)`, and forwards the model's text deltas back to the browser over Server-Sent Events. If you toggle web search on, it adds Anthropic's [`web_search` server tool](https://docs.anthropic.com/en/docs/agents-and-tools/tool-use/web-search-tool) to the request — Anthropic handles the actual searching.
+[`api/chat.py`](api/chat.py) is a single Python serverless function. It accepts a POST with the conversation history and configuration, calls `client.messages.stream(...)`, and forwards events back to the browser over Server-Sent Events:
+
+- `text` — model output deltas
+- `thinking` — extended thinking deltas (when enabled)
+- `tool_use` — when the model invokes a server tool (like web search)
+- `done` — final message with token usage
+- `error` — anything that went wrong
+
+If you toggle web search on, it adds Anthropic's [`web_search` server tool](https://docs.anthropic.com/en/docs/agents-and-tools/tool-use/web-search-tool). If you toggle thinking on, it adds the `thinking` parameter with a 4k token budget.
 
 ### What the client does
 
-[`public/app.js`](public/app.js) keeps everything in `localStorage` under one key: a list of projects, each with messages and files. When you hit Send, it builds an Anthropic-style messages array (with `image`, `document`, and `text` content blocks for any attached files) and POSTs it to `/api/chat`, then renders the streamed text into the conversation as it arrives.
+[`public/app.js`](public/app.js) keeps everything in `localStorage` under one key: a list of projects, each with its own conversations, files, and settings. When you hit Send, it builds an Anthropic-style messages array (with `image`, `document`, and `text` content blocks for any attached files) and POSTs it to `/api/chat`, then renders the streamed events into the conversation as they arrive.
+
+---
+
+## A note on cost estimates
+
+The dollar amounts shown next to each message and at the top of each conversation are **estimates** based on Anthropic's published per-million-token pricing at the time this code was written. They're meant to give you a quick sense of "is this conversation expensive?" — they are *not* a substitute for real billing data.
+
+Anthropic occasionally updates pricing (and adds prompt caching, batching discounts, and other features that affect real cost). The single source of truth for what you actually pay is your [Anthropic Console](https://console.anthropic.com/) — check usage there and [the official pricing page](https://www.anthropic.com/pricing) before relying on these numbers for anything real.
+
+To update the prices used in this UI: open [`public/app.js`](public/app.js), find the `MODELS` array near the top, and edit each model's `pricePerMillion: { input, output }`. Set both to `0` if you'd rather just see token counts without any dollar estimate.
 
 ---
 
 ## Customizing
 
-**Add or change models** — edit the `MODELS` array at the top of [`public/app.js`](public/app.js). Use any Claude model ID from [the API docs](https://docs.anthropic.com/en/docs/about-claude/models).
+**Add or change models** — edit the `MODELS` array at the top of [`public/app.js`](public/app.js). Each entry needs an `id` (the API model ID), a `label` (what shows in the dropdown), `pricePerMillion` (for the cost estimate), and `supportsThinking` (whether to enable the thinking toggle for it).
 
-**Change the default system prompt** — the `DEFAULT_SYSTEM` constant in `app.js`, or just edit it per-project from the **Settings** dialog.
+**Change the default system prompt** — the `DEFAULT_SYSTEM` constant in `app.js`, or just edit it per-project in the **Settings** dialog.
 
-**Tweak the look** — everything theme-related lives in CSS variables at the top of [`public/styles.css`](public/styles.css). Colors, spacing, sidebar width — change one variable, the whole UI updates.
+**Tweak the look** — everything theme-related lives in CSS variables at the top of [`public/styles.css`](public/styles.css). Colors, spacing, sidebar width — change one variable, the whole UI updates. Auto-respects your OS dark/light setting.
+
+**Tune the thinking budget** — `THINKING_BUDGET` constants in both `app.js` and `chat.py`. Higher = more reasoning headroom, but more tokens.
 
 **Add another tool** — in `api/chat.py`, the `tools` array is where Anthropic's server tools (web_search, code_execution, etc.) get added. To add **client-side** tools, you'd handle `content_block_start` events of type `tool_use` in the stream handler and extend the client's event loop.
 
@@ -102,10 +130,9 @@ That's everything. There's no build step, no framework, no bundler. Open the fil
 This is a reference, not a product. On purpose, it doesn't include:
 
 - **Authentication** — anyone with the URL can use it. If you deploy publicly, your API key pays the bill. Either keep the URL private, add password protection in Vercel (paid), or add auth yourself.
-- **Cross-device sync** — `localStorage` is per-browser. Open it on your phone and you start fresh.
-- **Conversation export** — if you want to save chats elsewhere, export them yourself from `localStorage` (DevTools → Application → Local Storage).
+- **Cross-device sync** — `localStorage` is per-browser. Open it on your phone and you start fresh. (Use the export buttons to move conversations.)
 - **Markdown rendering** — assistant output is plain text. Add [marked](https://github.com/markedjs/marked) or [remark](https://github.com/remarkjs/remark) if you want code blocks, lists, etc. rendered.
-- **Token counting / cost display** — the API returns usage info (you'll see it in the network tab) but the UI doesn't surface it.
+- **Prompt caching / batch / files API** — these are Anthropic features that can save real money on long contexts. Worth adding if your conversations get long.
 
 Each of these is a small extension. The point of this repo is to give you something simple that works, so you can add what you need without fighting the existing code.
 

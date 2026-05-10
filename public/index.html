@@ -15,6 +15,8 @@
     <nav id="project-list" aria-label="Projects"></nav>
     <footer class="sidebar-footer">
       <a href="https://docs.anthropic.com/en/api/getting-started" target="_blank" rel="noopener">API docs</a>
+      <span class="sep">·</span>
+      <a href="https://console.anthropic.com/" target="_blank" rel="noopener">Console</a>
     </footer>
   </aside>
 
@@ -31,10 +33,29 @@
           <select id="model-select" title="Model"></select>
           <label class="toggle">
             <input type="checkbox" id="web-search-toggle" />
-            <span>Web search</span>
+            <span>Web</span>
+          </label>
+          <label class="toggle" id="thinking-toggle-label">
+            <input type="checkbox" id="thinking-toggle" />
+            <span>Think</span>
           </label>
           <button id="settings-btn" class="ghost" title="Project settings">Settings</button>
           <button id="delete-project-btn" class="danger ghost" title="Delete this project">Delete</button>
+        </div>
+      </header>
+
+      <header class="conv-header">
+        <input id="conv-name" class="conv-name" type="text" maxlength="80" placeholder="Conversation name" />
+        <span id="conv-usage" class="conv-usage muted small"></span>
+        <div class="conv-controls">
+          <div class="export-wrap">
+            <button id="export-btn" class="ghost" title="Export conversation">Export ▾</button>
+            <div id="export-menu" class="export-menu" hidden>
+              <button id="export-md">Markdown (.md)</button>
+              <button id="export-json">JSON (.json)</button>
+            </div>
+          </div>
+          <button id="delete-conv-btn" class="danger ghost" title="Delete this conversation">Delete chat</button>
         </div>
       </header>
 
@@ -72,6 +93,8 @@
       </menu>
     </form>
   </dialog>
+
+  <div id="toast" class="toast" hidden></div>
 
   <script src="/app.js"></script>
 </body>
