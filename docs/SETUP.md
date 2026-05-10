@@ -70,6 +70,24 @@ If something didn't work, jump to **Common gotchas** below.
 
 ---
 
+## Step 4: Lock it down before sharing the URL (recommended)
+
+By default your deployment is public — **anyone who knows the URL can chat, and every message they send costs you money** (your API key pays the bill). If you're only using this yourself, fix that with Vercel's free **Vercel Authentication** feature.
+
+1. Go to [vercel.com](https://vercel.com) → click your project.
+2. In the left sidebar, click **Settings**.
+3. Click **Deployment Protection**.
+4. Find the **Vercel Authentication** section.
+5. Toggle it **on**, set it to apply to **All Deployments** (or just Production if you only want to protect your live URL), and click **Save**.
+
+That's it. Now when someone visits your URL, they'll see a "Sign in with Vercel" screen. Only people listed under **Settings → Members** can get past it — and on the free Hobby plan, that's just you.
+
+> **Note:** "Vercel Authentication" gives you a per-Vercel-account login wall. For a single shared password (the kind you can give to a friend without making them sign up for Vercel), look at **Password Protection** in the same Deployment Protection page — but that one is currently a paid feature. Verify the tier in your own account before counting on it.
+
+**If you want to share the running app with someone else without paying:** the cleanest path is to send them this repo, have them fork and deploy their own copy with their own API key. That way each person's costs are on their own bill. That's also the assumption this repo is built around.
+
+---
+
 ## Common gotchas
 
 **"ANTHROPIC_API_KEY is not set" or 500 errors when sending a message.**

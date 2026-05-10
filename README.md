@@ -202,10 +202,10 @@ This is genuinely how this README was written and how the app was built — Clau
 
 This is a reference, not a product. On purpose, it doesn't include:
 
-- **Authentication** — anyone with the URL can use it, and your API key pays for every message they send. Three ways to handle that:
-  - **Vercel Authentication** (free on Hobby) — your project's Settings → Deployment Protection → "Vercel Authentication." Viewers must sign in with a Vercel account to see the deployment.
-  - **Password Protection** (custom shared password) — also under Deployment Protection. Tier availability changes; check your account.
-  - **Roll your own** — add basic auth or a sign-in flow in the code.
+- **Authentication** — anyone with the URL can use it, and your API key pays for every message they send. Three ways to handle that, in order of effort:
+  - **Vercel Authentication** (free on Hobby) — locks the deployment behind a Vercel sign-in. See [docs/SETUP.md → Step 4](docs/SETUP.md#step-4-lock-it-down-before-sharing-the-url-recommended) for the click-by-click steps.
+  - **Password Protection** (custom shared password anyone can type in) — same Deployment Protection page, but currently a paid feature. Verify in your account.
+  - **Roll your own** — add basic auth or a sign-in flow in the code yourself.
 - **Cross-device sync** — `localStorage` is per-browser. Open it on your phone and you start fresh. (Use the export buttons to move conversations.)
 - **Markdown rendering** — assistant output is plain text. Add [marked](https://github.com/markedjs/marked) or [remark](https://github.com/remarkjs/remark) if you want code blocks, lists, etc. rendered.
 - **Batch API / files API** — Anthropic features for offline bulk requests and large file management. Worth adding for advanced use cases. (Prompt caching IS included — see above.)
