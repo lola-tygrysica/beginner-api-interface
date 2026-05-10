@@ -1,6 +1,6 @@
 # Beginner API Interface
 
-A clean, ready-to-deploy chat UI for the Claude API. **Auth and per-user data sync are built in** — your deployment requires sign-in by default, so a stranger who finds your URL can't spend your Anthropic credits.
+A clean, ready-to-deploy chat UI for the Claude API. **Auth and per-user data sync are built in.** Follow the 5-step setup (including a one-toggle Supabase lockdown) and your deployment is private to you — strangers who find your URL can't spend your Anthropic credits.
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fcrmccarthy79-ai%2Fbeginner-api-interface&env=ANTHROPIC_API_KEY,SUPABASE_URL,SUPABASE_ANON_KEY,SUPABASE_JWT_SECRET&envDescription=See%20docs%2FSUPABASE_SETUP.md%20for%20how%20to%20get%20the%20Supabase%20values&envLink=https%3A%2F%2Fgithub.com%2Fcrmccarthy79-ai%2Fbeginner-api-interface%2Fblob%2Fmain%2Fdocs%2FSUPABASE_SETUP.md&project-name=beginner-api-interface&repository-name=beginner-api-interface)
 
@@ -133,9 +133,10 @@ This README and most of this app were built that way.
 
 ## What this isn't
 
+- **Safe out of the box without locking down signups.** ⚠️ The auth wall doesn't help you if anyone can sign up — they'd just enter their email, get a magic link, and start spending your Anthropic credits. **You must disable signups in Supabase after creating your own account** (see [docs/SETUP.md Step 6](docs/SETUP.md#step-6-lock-down-signups-required-before-sharing)). This is one toggle and it's the difference between "private to you" and "open bar." Don't share your URL until you've done it.
 - **Foolproof.** A determined attacker who got your `SUPABASE_JWT_SECRET` could forge tokens. Keep it secret. The repo's `.gitignore` covers `.env`; if you ever expose the secret, rotate it in Supabase Settings → API.
-- **Free of Anthropic charges.** The auth wall stops *strangers* from costing you money. Your own usage still hits your bill. Set a spending cap at [console.anthropic.com](https://console.anthropic.com/) → Plans & Billing.
-- **Without rate limits.** Nothing in this code stops a signed-in user from hammering `/api/chat`. If that's a concern, add rate-limiting at the Vercel edge or in the function.
+- **Free of Anthropic charges for *your own* usage.** The auth wall stops *other people* from costing you money. Your own chats still hit your bill. Set a monthly spending cap at [console.anthropic.com](https://console.anthropic.com/) → Plans & Billing for peace of mind.
+- **Without rate limits.** Nothing in this code stops a signed-in user (you, by default, after lockdown) from hammering `/api/chat`. Add rate-limiting at the Vercel edge or in the function if you need it.
 - **A finished product.** It's a learning reference designed to be modified. Markdown rendering, real-time multi-user sync, file storage, batch API — all good extensions.
 
 ---

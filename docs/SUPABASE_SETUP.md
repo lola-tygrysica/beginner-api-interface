@@ -86,11 +86,26 @@ Without this, magic-link emails will go out but clicking them will dump people o
 
 ---
 
+## Step 6 (required): sign in once, then lock down signups
+
+This is the step that actually makes your deployment safe. Without it, **anyone** who finds your URL could enter their email, get a magic link, sign up, and start spending your Anthropic credits — the auth wall by itself only stops people who refuse to type an email address. Skip this step at your peril.
+
+1. Open your deployed URL. You should see a sign-in screen.
+2. Enter **your** email, hit **Send link**, check your inbox, click the link. You're now signed in. **You are now the only user that exists.**
+3. Go back to Supabase → **Authentication** (left sidebar) → **Sign In / Providers** (or **Settings** depending on your UI).
+4. Find the **Email** provider section.
+5. Find the toggle labeled **Allow new users to sign up** (sometimes called "Enable signups"). Toggle it **OFF**.
+6. Save.
+
+Now nobody else can sign up. Magic-link sign-in still works for anyone whose email is already in your `auth.users` table — but right now that's just you.
+
+> **If you want to add another person later** (say, a partner or collaborator): re-enable signups briefly, have them sign up, then turn it off again. Or: in Supabase → Authentication → Users, click **Invite user** and enter their email — they'll be added to the user table, and signups can stay off.
+
+---
+
 ## Done
 
-Open your deployed URL. You should see a sign-in screen. Enter your email, hit **Send link**, check your inbox, click the link, and you're in.
-
-Each signed-in user gets their own private space — their projects, conversations, and files are visible only to them. Open the app on your phone, sign in with the same email, and you'll see all the same conversations. That's the cross-device sync, free.
+Each signed-in user gets their own private space — their projects, conversations, and files are visible only to them via row-level security. Open the app on your phone, sign in with the same email, and you'll see all the same conversations. That's the cross-device sync, free.
 
 ---
 

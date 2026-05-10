@@ -98,16 +98,28 @@ Open your Vercel URL. You'll see a sign-in screen.
 4. A first project is auto-created. Click the project name at the top to rename it.
 5. Type a message in the box at the bottom and press **Enter**.
 
-If you get this far, **you're done**. Your deployment is safe to share — anyone who knows the URL can see the sign-in screen, but only people who actually sign in can use it.
+**Don't share the URL yet.** Right now, anyone could enter their email, get a magic link, and sign up — and once signed in, they'd be using your Anthropic key. One more step closes that loophole.
 
 ---
 
-## Step 6: Want a *more* private deployment? (optional)
+## Step 6: Lock down signups (REQUIRED before sharing)
 
-By default, anyone with your URL can sign up and use the app — they'll spend credits on the API call, but they need to be signed in (which gives you their email). If you want the deployment locked to *just specific people*, two options:
+You signed up first, which means you're the only user that exists right now. The next move is to **stop further signups**, so you stay the only user.
 
-- **In Supabase:** Authentication → Settings → toggle off **Enable email signups**. Then in Authentication → Users, manually invite specific email addresses. Now only invited users can sign in.
-- **Set an Anthropic spending cap** at [console.anthropic.com](https://console.anthropic.com/) → Plans & Billing. Caps your blast radius if anything goes sideways.
+1. Supabase dashboard → **Authentication** (left sidebar) → **Sign In / Providers** (the wording varies — sometimes it's just **Settings**).
+2. Find the **Email** provider section.
+3. Toggle **OFF** the "Allow new users to sign up" (sometimes labeled "Enable signups") setting.
+4. Save.
+
+Now nobody else can sign up. Only you can sign in. **Your URL is safe to share.**
+
+If you ever want to add a collaborator: in Supabase → Authentication → Users, click **Invite user** and enter their email. That adds them to the user table without re-enabling open signups.
+
+---
+
+## Step 7: Belt-and-suspenders — set a spending cap (recommended)
+
+Even with auth locked down, set a cap on your Anthropic spending so the worst-case bill is bounded. [console.anthropic.com](https://console.anthropic.com/) → Plans & Billing → set a monthly cap. 60 seconds, peace of mind forever.
 
 ---
 
