@@ -294,7 +294,7 @@ function removeFile(fileId) {
 // ---------- Building API requests ----------
 
 function buildApiMessages(project, conv) {
-  return conv.messages.map(msg => {
+  const out = conv.messages.map(msg => {
     if (msg.role === "user") {
       const content = [];
       for (const fid of msg.fileIds || []) {
@@ -323,6 +323,17 @@ function buildApiMessages(project, conv) {
     }
     return { role: "assistant", content: msg.text || " " };
   });
+
+  // Mark the last content block of the last message as a cache breakpoint.
+  // On follow-up turns this caches the full prefix, so each turn pays full
+  // price only for the new content. Anthropic ignores markers on prefixes
+  // shorter than the cache minimum (~1024 tokens), so this is harmless on
+  // short conversations.
+  const last = out[out.length - 1];
+  if (last && Array.isArray(last.content) && last.content.length > 0) {
+    last.content[last.content.length - 1].cache_control = { type: "ephemeral" };
+  }
+  return out;
 }
 
 // ---------- Streaming ----------
@@ -467,17 +478,38 @@ function estimateCost(tokens, perMillion) {
   return (tokens / 1_000_000) * perMillion;
 }
 
+// Anthropic's 5-minute prompt cache: writes cost 1.25x input, reads cost 0.1x.
+const CACHE_WRITE_MULT = 1.25;
+const CACHE_READ_MULT = 0.1;
+
+function messageCost(usage, info) {
+  if (!usage) return 0;
+  return (
+    estimateCost(usage.input_tokens || 0, info.pricePerMillion.input) +
+    estimateCost(usage.cache_creation_input_tokens || 0, info.pricePerMillion.input * CACHE_WRITE_MULT) +
+    estimateCost(usage.cache_read_input_tokens || 0,     info.pricePerMillion.input * CACHE_READ_MULT) +
+    estimateCost(usage.output_tokens || 0,               info.pricePerMillion.output)
+  );
+}
+
+function totalInput(usage) {
+  if (!usage) return 0;
+  return (usage.input_tokens || 0) +
+         (usage.cache_creation_input_tokens || 0) +
+         (usage.cache_read_input_tokens || 0);
+}
+
 function conversationTotals(project, conv) {
-  let input = 0, output = 0;
-  for (const m of conv.messages) {
-    if (m.usage) {
-      input += m.usage.input_tokens || 0;
-      output += m.usage.output_tokens || 0;
-    }
-  }
+  let input = 0, output = 0, cached = 0, cost = 0;
   const info = modelInfo(project.model);
-  const cost = estimateCost(input, info.pricePerMillion.input) + estimateCost(output, info.pricePerMillion.output);
-  return { input, output, cost };
+  for (const m of conv.messages) {
+    if (!m.usage) continue;
+    input  += totalInput(m.usage);
+    output += m.usage.output_tokens || 0;
+    cached += m.usage.cache_read_input_tokens || 0;
+    cost   += messageCost(m.usage, info);
+  }
+  return { input, output, cached, cost };
 }
 
 function formatTokens(n) {
@@ -496,10 +528,12 @@ function formatCost(cost) {
 function messageUsageLabel(msg, project) {
   if (!msg.usage) return "";
   const info = modelInfo(project.model);
-  const cost = estimateCost(msg.usage.input_tokens, info.pricePerMillion.input) +
-               estimateCost(msg.usage.output_tokens, info.pricePerMillion.output);
-  const tokens = `${formatTokens(msg.usage.input_tokens)} in · ${formatTokens(msg.usage.output_tokens)} out`;
-  const dollars = formatCost(cost);
+  const inTok = totalInput(msg.usage);
+  const cachedRead = msg.usage.cache_read_input_tokens || 0;
+  const tokens = cachedRead > 0
+    ? `${formatTokens(inTok)} in (${formatTokens(cachedRead)} cached) · ${formatTokens(msg.usage.output_tokens)} out`
+    : `${formatTokens(inTok)} in · ${formatTokens(msg.usage.output_tokens)} out`;
+  const dollars = formatCost(messageCost(msg.usage, info));
   return dollars ? `${tokens} · ${dollars}` : tokens;
 }
 
@@ -542,6 +576,49 @@ function exportConversationJson() {
     totals: conversationTotals(project, conv),
   };
   downloadFile(`${safeFilename(conv.name)}.json`, JSON.stringify(data, null, 2), "application/json");
+}
+
+async function importConversationJson(file) {
+  const project = getActiveProject();
+  if (!project) {
+    alert("Create a project first.");
+    return;
+  }
+  let data;
+  try {
+    data = JSON.parse(await file.text());
+  } catch (e) {
+    alert(`Couldn't parse JSON: ${e.message}`);
+    return;
+  }
+  if (!Array.isArray(data.messages)) {
+    alert("That doesn't look like a Beginner API export — no messages array.");
+    return;
+  }
+
+  const conv = {
+    id: uid(),
+    name: data.conversation || data.name || `Imported ${new Date().toLocaleDateString()}`,
+    createdAt: Date.now(),
+    messages: data.messages.map(m => ({
+      id: uid(),
+      role: m.role === "assistant" ? "assistant" : "user",
+      text: typeof m.text === "string" ? m.text : "",
+      thinkingText: m.thinkingText || "",
+      toolEvents: [],
+      usage: m.usage || null,
+      // Files referenced by name in the import aren't reproduced — the export
+      // doesn't include their bytes. We surface their names via `fileIds: []`
+      // and leave the real attachment behavior up to the user.
+      fileIds: [],
+    })),
+    activeFileIds: [],
+  };
+  project.conversations.unshift(conv);
+  project.activeConversationId = conv.id;
+  saveState();
+  render();
+  flashToast(`Imported ${conv.messages.length} messages`);
 }
 
 function exportConversationMarkdown() {
@@ -834,7 +911,12 @@ function updateConversationUsageBar() {
   if (!project || !conv) { bar.textContent = ""; return; }
   const t = conversationTotals(project, conv);
   if (!t.input && !t.output) { bar.textContent = ""; return; }
-  const parts = [`${formatTokens(t.input)} in`, `${formatTokens(t.output)} out`];
+  const parts = [
+    t.cached > 0
+      ? `${formatTokens(t.input)} in (${formatTokens(t.cached)} cached)`
+      : `${formatTokens(t.input)} in`,
+    `${formatTokens(t.output)} out`,
+  ];
   if (t.cost) parts.push(formatCost(t.cost));
   bar.textContent = parts.join(" · ");
 }
@@ -1004,6 +1086,12 @@ function init() {
   exportMenu.addEventListener("click", (e) => e.stopPropagation());
   $("export-json").addEventListener("click", () => { exportMenu.hidden = true; exportConversationJson(); });
   $("export-md").addEventListener("click",   () => { exportMenu.hidden = true; exportConversationMarkdown(); });
+
+  $("import-btn").addEventListener("click", () => $("import-file").click());
+  $("import-file").addEventListener("change", async (e) => {
+    if (e.target.files[0]) await importConversationJson(e.target.files[0]);
+    e.target.value = "";
+  });
 
   $("attach-btn").addEventListener("click", () => $("file-input").click());
   $("file-input").addEventListener("change", async (e) => {

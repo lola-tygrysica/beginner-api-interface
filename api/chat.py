@@ -62,7 +62,14 @@ class handler(BaseHTTPRequestHandler):
         }
         system = data.get("system")
         if system:
-            kwargs["system"] = system
+            # Wrap the system prompt as a cacheable text block. Anthropic
+            # ignores cache markers on content under ~1024 tokens, so short
+            # prompts still work but won't be cached.
+            kwargs["system"] = [{
+                "type": "text",
+                "text": system,
+                "cache_control": {"type": "ephemeral"},
+            }]
         if data.get("useWebSearch"):
             kwargs["tools"] = [{
                 "type": "web_search_20250305",
@@ -91,6 +98,8 @@ class handler(BaseHTTPRequestHandler):
                     "usage": {
                         "input_tokens": final.usage.input_tokens,
                         "output_tokens": final.usage.output_tokens,
+                        "cache_creation_input_tokens": getattr(final.usage, "cache_creation_input_tokens", 0) or 0,
+                        "cache_read_input_tokens": getattr(final.usage, "cache_read_input_tokens", 0) or 0,
                     },
                 })
         except anthropic.APIStatusError as e:
