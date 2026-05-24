@@ -551,6 +551,96 @@ async function removeFile(fileId) {
   }
 }
 
+// ---------- Memory ----------
+
+async function fetchMemoryContext(projectId) {
+  const userId = state.user?.id;
+  if (!userId || !db) return null;
+
+  try {
+    const [
+      { data: selfState },
+      { data: coreMemories },
+      { data: preferences },
+      { data: entities },
+    ] = await Promise.all([
+      db.from("self_state")
+        .select("key, value, summary")
+        .eq("user_id", userId)
+        .or(`project_id.eq.${projectId},project_id.is.null`),
+      db.from("core_memories")
+        .select("title, content, memory_type, importance, tags")
+        .eq("user_id", userId)
+        .eq("is_active", true)
+        .or(`project_id.eq.${projectId},project_id.is.null`)
+        .order("importance", { ascending: false })
+        .limit(20),
+      db.from("user_preferences")
+        .select("category, preference_key, preference_value, note")
+        .eq("user_id", userId)
+        .or(`project_id.eq.${projectId},project_id.is.null`),
+      db.from("claude_memory_entities")
+        .select("entity_name, entity_type, description, attributes, importance")
+        .eq("user_id", userId)
+        .eq("is_active", true)
+        .or(`project_id.eq.${projectId},project_id.is.null`)
+        .order("importance", { ascending: false })
+        .limit(30),
+    ]);
+
+    return { selfState, coreMemories, preferences, entities };
+  } catch (e) {
+    console.error("Memory fetch failed:", e);
+    return null;
+  }
+}
+
+function buildMemoryBlock(memories) {
+  if (!memories) return "";
+  const { selfState, coreMemories, preferences, entities } = memories;
+  const parts = [];
+
+  if (selfState?.length) {
+    parts.push("## Self State");
+    for (const s of selfState) {
+      const label = s.summary || s.key;
+      const val = typeof s.value === "string" ? s.value : JSON.stringify(s.value);
+      parts.push(`- **${label}**: ${val}`);
+    }
+  }
+
+  if (coreMemories?.length) {
+    parts.push("## Core Memories");
+    for (const m of coreMemories) {
+      parts.push(`- [${m.memory_type}] **${m.title}**: ${m.content}`);
+    }
+  }
+
+  if (preferences?.length) {
+    parts.push("## User Preferences");
+    for (const p of preferences) {
+      const val = typeof p.preference_value === "string"
+        ? p.preference_value
+        : JSON.stringify(p.preference_value);
+      const note = p.note ? ` (${p.note})` : "";
+      parts.push(`- **${p.category}/${p.preference_key}**: ${val}${note}`);
+    }
+  }
+
+  if (entities?.length) {
+    parts.push("## Known Entities");
+    for (const e of entities) {
+      const attrs = e.attributes && Object.keys(e.attributes).length
+        ? ` ${JSON.stringify(e.attributes)}`
+        : "";
+      parts.push(`- [${e.entity_type}] **${e.entity_name}**: ${e.description || ""}${attrs}`);
+    }
+  }
+
+  if (parts.length === 0) return "";
+  return "\n\n---\n# Memory Context\n\n" + parts.join("\n") + "\n---";
+}
+
 // ---------- Building API requests ----------
 
 function isFailedAssistantTurn(msg) {
@@ -683,10 +773,14 @@ async function generateAssistant() {
   render();
 
   try {
+    const memories = await fetchMemoryContext(project.id);
+    const memoryBlock = buildMemoryBlock(memories);
+    const systemWithMemory = (project.systemPrompt || DEFAULT_SYSTEM) + memoryBlock;
+
     await streamChat(
       {
         model: project.model,
-        system: project.systemPrompt || DEFAULT_SYSTEM,
+        system: systemWithMemory,
         messages: buildApiMessages(project, cleanMessagesForApi(conv.messages)).slice(0, -1),
         useWebSearch: !!project.webSearch,
         thinking: !!project.thinking,
